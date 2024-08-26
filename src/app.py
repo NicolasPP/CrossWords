@@ -1,4 +1,5 @@
 import pygame
+
 from config import WINDOW_HEIGHT, WINDOW_WIDTH
 from cross_words import CrossWords
 from delta_time import DeltaTime
