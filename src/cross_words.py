@@ -67,10 +67,21 @@ class CrossWords:
             mouse_pos: Vector2 = self._get_board_mouse_pos()
             for cell in self._display.grid:
                 if cell.placement.collidepoint(mouse_pos):
-                    cell_clues = self._puzzle.clues.by_index[cell.index]
+                    if self._puzzle.board.state[cell.index] == VOID_CELL:
+                        return
 
-                    print("Across: ", self._puzzle.clues.across[cell_clues.across])
-                    print("Down: ", self._puzzle.clues.down[cell_clues.down])
+                    cell_clues = self._puzzle.clues.by_index[cell.index]
+                    print(cell_clues, cell.index, self._puzzle.answers.completed[cell.index], sep=", ")
+
+                    if cell_clues.across is not None:
+                        print("Across: ", self._puzzle.clues.across[cell_clues.across])
+                        print("Answer: ", self._puzzle.answers.across[cell_clues.across])
+
+                    if cell_clues.down is not None:
+                        print("Down: ", self._puzzle.clues.down[cell_clues.down])
+                        print("Answer: ", self._puzzle.answers.down[cell_clues.down])
+
+                    print("----------------------------")
                     self._selected = cell.index
 
         if event.type == pygame.KEYDOWN:

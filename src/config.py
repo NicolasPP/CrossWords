@@ -1,3 +1,3 @@
-DATA_PATH: str = 'data'
-WINDOW_WIDTH: int = 1000
-WINDOW_HEIGHT: int = 700
+DATA_PATH: str = r"data\2013"
+WINDOW_WIDTH: int = 1100
+WINDOW_HEIGHT: int = 800

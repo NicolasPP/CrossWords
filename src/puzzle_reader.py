@@ -1,7 +1,12 @@
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, NamedTuple, Optional
+from typing import (
+    Any,
+    Iterator,
+    NamedTuple,
+    Optional,
+)
 
 from config import DATA_PATH
 
@@ -40,7 +45,7 @@ class Puzzle(NamedTuple):
     clues: Clues
 
 
-def create_puzzle(puzzle_data: dict[str, Any]) -> Puzzle:
+def create_puzzle(puzzle_data: dict[str, Any]) -> Optional[Puzzle]:
     board: Board = Board(
         [cell if cell == VOID_CELL else EMPTY_CELL for cell in puzzle_data["grid"]],
         puzzle_data["size"]["rows"],
@@ -88,6 +93,16 @@ def create_puzzle(puzzle_data: dict[str, Any]) -> Puzzle:
                 if next_index >= board.cols * board.rows:
                     break
 
+    for index, cell in enumerate(board.state):
+        if cell == VOID_CELL:
+            continue
+
+        if by_index[index].across is None or by_index[index].down is None:
+            # FIXME: this will usually mean some edge case I will not add support for ;)
+            #        e.g when there are words in NULL_CELLS https://www.xwordinfo.com/Crossword?date=12/1/2013&g=48&d=A
+            #        puzzle: 2013-12-1
+            return None
+
     answers: Answers = Answers(
         answers_across,
         answers_down,
@@ -104,13 +119,35 @@ def create_puzzle(puzzle_data: dict[str, Any]) -> Puzzle:
     return Puzzle(board, answers, clues)
 
 
-def read_puzzle() -> Puzzle:
+def puzzles() -> Iterator[Puzzle]:
     path: Path = Path(DATA_PATH)
-
     if not path.exists():
         raise ValueError(f"Data Path does not exist {path.absolute()}")
 
-    with open(path / "01.json", "r") as puzzle_file:
+    for month in path.iterdir():
+        if not month.is_dir():
+            continue
+
+        for day in month.iterdir():
+            if day.is_dir():
+                continue
+
+            with open(day.absolute(), "r") as puzzle_file:
+                puzzle_data: dict[str, Any] = json.load(puzzle_file)
+
+            puzzle: Optional[Puzzle] = create_puzzle(puzzle_data)
+            if puzzle is None:
+                continue
+
+            yield puzzle
+
+
+def get_that_one() -> Puzzle:
+    # path: Path = Path("data/2013/06/16.json")
+    path: Path = Path("data/2013/01/17.json")
+    # path: Path = Path("data/2013/12/01.json")
+    # path: Path = Path("data/2013/08/29.json")
+    with open(path.absolute(), "r") as puzzle_file:
         puzzle_data: dict[str, Any] = json.load(puzzle_file)
 
     return create_puzzle(puzzle_data)
