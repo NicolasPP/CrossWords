@@ -1,0 +1,3 @@
+DATA_PATH: str = 'data'
+WINDOW_WIDTH: int = 1000
+WINDOW_HEIGHT: int = 800
