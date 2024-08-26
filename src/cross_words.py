@@ -1,5 +1,7 @@
-from typing import Any, NamedTuple
+from dataclasses import dataclass
+from typing import Any, NamedTuple, Optional
 
+from pygame.event import Event
 from pygame.font import Font, SysFont, get_fonts
 from pygame.math import Vector2
 from pygame.rect import Rect
@@ -11,11 +13,13 @@ PADDING: int = 2
 HOVER_ALPHA: int = 50
 
 
-class Cell(NamedTuple):
+@dataclass(slots=True)
+class Cell:
     placement: Rect
     surface: Surface
     hover: Surface
     index: int
+    value: Optional[str] = None
 
 
 class Board(NamedTuple):
@@ -30,6 +34,49 @@ class CrossWords:
         self._puzzle: dict[str, Any] = puzzle
         self._font: Font = SysFont(get_fonts()[0], 10)
         self._board: Board = self._create_board()
+        self._selected: Optional[int] = None
+
+    def process_input(self, event: Event) -> None:
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            mouse_pos: Vector2 = self._get_board_mouse_pos()
+            for cell in self._board.grid:
+                if cell.placement.collidepoint(mouse_pos):
+                    self._selected = cell.index
+
+        if event.type == pygame.KEYDOWN:
+
+            if event.key == pygame.K_BACKSPACE:
+                self._set_selected_value(None)
+                return
+
+            elif event.unicode.isalpha():
+                self._set_selected_value(event.unicode.upper())
+                self._jump_to_next_selected()
+                return
+
+    def _jump_to_next_selected(self) -> None:
+        if self._selected is None:
+            return
+
+        next_selected: int = self._selected + 1
+        if next_selected >= len(self._board.grid):
+            self._selected = None
+            return
+
+        if self._puzzle["grid"][next_selected] == ".":
+            while self._puzzle["grid"][next_selected] == ".":
+                next_selected += 1
+
+        if next_selected >= len(self._board.grid):
+            self._selected = None
+        else:
+            self._selected = next_selected
+
+    def _set_selected_value(self, value: Optional[str]) -> None:
+        if self._selected is None:
+            return
+
+        self._board.grid[self._selected].value = value
 
     def update(self, delta_time: float) -> None:
         pass
@@ -55,7 +102,7 @@ class CrossWords:
                     Rect(col * size, row * size, size, size),
                     Surface((size, size)),
                     hover,
-                    (row * cols + col)
+                    (row * cols + col),
                 )
 
                 self._draw_cell(cell)
@@ -65,14 +112,27 @@ class CrossWords:
 
         return Board(placement, surface, grid)
 
-    def render(self) -> None:
-        mouse_pos: Vector2 = Vector2(pygame.mouse.get_pos()) - Vector2(self._board.placement.topleft)
-        for cell in self._board.grid:
-            self._board.surface.blit(cell.surface, cell.placement)
+    def _render_cell(self, cell: Cell) -> None:
 
-            #  Rendering hover surface
-            if cell.placement.collidepoint(mouse_pos):
-                self._board.surface.blit(cell.hover, cell.placement)
+        if self._puzzle["grid"][cell.index] == ".":
+            return
+
+        self._board.surface.blit(cell.surface, cell.placement)
+
+        if cell.value is not None:
+            value_sign: Surface = self._font.render(cell.value, True, "black", "white")
+            self._board.surface.blit(value_sign, value_sign.get_rect(center=cell.placement.center))
+
+        #  Rendering hover surface
+        if cell.index == self._selected:
+            self._board.surface.blit(cell.hover, cell.placement)
+
+    def _get_board_mouse_pos(self) -> Vector2:
+        return Vector2(pygame.mouse.get_pos()) - Vector2(self._board.placement.topleft)
+
+    def render(self) -> None:
+        for cell in self._board.grid:
+            self._render_cell(cell)
 
         pygame.display.get_surface().blit(self._board.surface, self._board.placement)
 

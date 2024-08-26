@@ -21,6 +21,7 @@ class CrossWordsApp:
             self._delta_time.set()
 
             for event in pygame.event.get():
+                cross_words.process_input(event)
                 if event.type == pygame.QUIT:
                     self._done = True
 
