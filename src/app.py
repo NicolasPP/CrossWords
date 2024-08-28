@@ -32,7 +32,7 @@ class CrossWordsApp:
                     self._done = True
 
                 if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_SPACE:
+                    if event.key == pygame.K_RIGHT:
                         cross_words = CrossWords(next(self._puzzles))
                         pygame.display.get_surface().fill("black")
 

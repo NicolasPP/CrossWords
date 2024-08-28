@@ -14,6 +14,9 @@ from puzzle_reader import EMPTY_CELL, Puzzle, VOID_CELL
 
 PADDING: int = 2
 HOVER_ALPHA: int = 50
+WRONG_PAD: int = 7
+VALUE_FONT_SIZE: int = 20
+CLUE_ID_FONT_SIZE: int = 10
 
 
 class SelectionDirection(Enum):
@@ -21,16 +24,25 @@ class SelectionDirection(Enum):
     DOWN = auto()
 
 
+class CellState(Enum):
+    EMPTY = auto()
+    FILLED = auto()
+    CORRECT = auto()
+    WRONG = auto()
+
+
 @dataclass(slots=True, init=False)
 class CrossWordState:
     puzzle: Puzzle
     values: list[str]
+    locked_in: list[bool]
     selected: Optional[int]
 
     def __init__(self, puzzle: Puzzle) -> None:
         self.puzzle = puzzle
         self.values = [VOID_CELL if cell == VOID_CELL else EMPTY_CELL
                        for cell in puzzle.answers.completed]
+        self.locked_in = [False] * (puzzle.rows * puzzle.cols)
         self.selected = None
 
 
@@ -40,12 +52,14 @@ class CellDisplay:
     surface: Surface
     hover: Surface
     index: int
+    state: CellState
 
     def __init__(self, position: Vector2, size: Vector2, index: int) -> None:
         self.placement = Rect(*(position.elementwise() * size).xy, *size.xy)
         self.surface = Surface(size)
         self.hover = Surface(size)
         self.index = index
+        self.state = CellState.EMPTY
 
         self.hover.fill("black")
         self.hover.set_alpha(HOVER_ALPHA)
@@ -85,7 +99,7 @@ class CrossWords:
 
     def __init__(self, puzzle: Puzzle) -> None:
         self._state: CrossWordState = CrossWordState(puzzle)
-        self._font: Font = SysFont(get_fonts()[0], 10)
+        self._font_name: str = get_fonts()[0]
 
         self._display: BoardDisplay = self._create_display()
 
@@ -117,14 +131,29 @@ class CrossWords:
 
         if event.type == pygame.KEYDOWN:
 
-            if event.key == pygame.K_BACKSPACE:
-                self._set_selected_value(EMPTY_CELL)
-                return
-
-            elif event.unicode.isalpha():
+            if event.unicode.isalpha():
                 self._set_selected_value(event.unicode.upper())
                 self._move_selected(SelectionDirection.RIGHT)
-                return
+
+            elif event.key == pygame.K_BACKSPACE:
+                self._set_selected_value(EMPTY_CELL)
+
+            elif event.key == pygame.K_SPACE:
+                self._check_puzzle()
+
+    def _check_puzzle(self) -> None:
+        for index, value in enumerate(self._state.values):
+            if value == VOID_CELL:
+                continue
+
+            if value == EMPTY_CELL:
+                continue
+
+            if value == self._state.puzzle.answers.completed[index]:
+                self._display.grid[index].state = CellState.CORRECT
+
+            else:
+                self._display.grid[index].state = CellState.WRONG
 
     def _move_selected(self, direction: SelectionDirection) -> None:
         # FIXME:  Moving down does wrap around.
@@ -157,6 +186,11 @@ class CrossWords:
         if self._state.selected is None:
             return
 
+        cell: CellDisplay = self._display.grid[self._state.selected]
+        if cell.state is CellState.CORRECT:
+            return
+
+        cell.state = CellState.EMPTY if value == EMPTY_CELL else CellState.FILLED
         self._state.values[self._state.selected] = value
 
     def update(self, delta_time: float) -> None:
@@ -180,7 +214,8 @@ class CrossWords:
                 cell_size,
                 (row * int(dimensions.y) + col),
             )
-            cell.draw(self._state, self._font)
+            font: Font = SysFont(self._font_name, CLUE_ID_FONT_SIZE)
+            cell.draw(self._state, font)
             grid.append(cell)
 
         surface: Surface = Surface(cell_size * dimensions.elementwise())
@@ -188,16 +223,24 @@ class CrossWords:
 
         return BoardDisplay(placement, surface, grid)
 
-    def _render_cell(self, cell: CellDisplay) -> None:
+    def _render_cell(self, cell: CellDisplay, font: Font) -> None:
 
         if self._state.values[cell.index] == VOID_CELL:
             return
 
         self._display.surface.blit(cell.surface, cell.placement)
 
+        #  Rendering user placed value
         if (value := self._state.values[cell.index]) not in [EMPTY_CELL, VOID_CELL]:
-            value_sign: Surface = self._font.render(value, True, "black", "white")
+            # FIXME: Probably not a good idea to render value every frame. Do it once when it changes.
+            color: str = "blue" if cell.state is CellState.CORRECT else "black"
+            value_sign: Surface = font.render(value, True, color, "white")
             self._display.surface.blit(value_sign, value_sign.get_rect(center=cell.placement.center))
+
+        if cell.state is CellState.WRONG:
+            pad: Vector2 = Vector2(WRONG_PAD)
+            pygame.draw.line(self._display.surface, "red", Vector2(cell.placement.topleft) + pad,
+                             Vector2(cell.placement.topleft) + Vector2(cell.surface.get_size()) - pad, 3)
 
         #  Rendering hover surface
         if cell.index == self._state.selected:
@@ -207,7 +250,8 @@ class CrossWords:
         return Vector2(pygame.mouse.get_pos()) - Vector2(self._display.placement.topleft)
 
     def render(self) -> None:
+        font: Font = SysFont(self._font_name, VALUE_FONT_SIZE)
         for cell in self._display.grid:
-            self._render_cell(cell)
+            self._render_cell(cell, font)
 
         pygame.display.get_surface().blit(self._display.surface, self._display.placement)
