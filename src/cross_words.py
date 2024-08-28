@@ -17,6 +17,7 @@ HOVER_ALPHA: int = 50
 WRONG_PAD: int = 7
 VALUE_FONT_SIZE: int = 20
 CLUE_ID_FONT_SIZE: int = 10
+BOARD_PADDING: int = 6
 
 
 class SelectionDirection(Enum):
@@ -48,6 +49,14 @@ class CrossWordState:
 
 @dataclass(slots=True, init=False)
 class CellDisplay:
+
+    @staticmethod
+    def get_size(puzzle: Puzzle) -> Vector2:
+        window_rect: Rect = pygame.display.get_surface().get_rect()
+        min_size: int = min(window_rect.width, window_rect.height) - BOARD_PADDING * 2
+        dimensions: Vector2 = Vector2(puzzle.rows, puzzle.cols)
+        return Vector2(min_size) // dimensions.elementwise()
+
     placement: Rect
     surface: Surface
     hover: Surface
@@ -89,10 +98,15 @@ class CellDisplay:
         self.surface.blit(content, content.get_rect(center=self.surface.get_rect().center))
 
 
+@dataclass(slots=True)
+class CluesDisplay:
+    placement: Rect
+    surface: Surface
+
+
 class BoardDisplay(NamedTuple):
     placement: Rect
     surface: Surface
-    grid: list[CellDisplay]
 
 
 class CrossWords:
@@ -101,12 +115,14 @@ class CrossWords:
         self._state: CrossWordState = CrossWordState(puzzle)
         self._font_name: str = get_fonts()[0]
 
-        self._display: BoardDisplay = self._create_display()
+        self._cells: list[CellDisplay] = self._create_cells_display()
+        self._board: BoardDisplay = self._create_board_display()
+        self._clues: CluesDisplay = self._create_clues_display()
 
     def process_input(self, event: Event) -> None:
         if event.type == pygame.MOUSEBUTTONDOWN:
             mouse_pos: Vector2 = self._get_board_mouse_pos()
-            for cell in self._display.grid:
+            for cell in self._cells:
                 if cell.placement.collidepoint(mouse_pos):
                     if self._state.values[cell.index] == VOID_CELL:
                         return
@@ -150,10 +166,10 @@ class CrossWords:
                 continue
 
             if value == self._state.puzzle.answers.completed[index]:
-                self._display.grid[index].state = CellState.CORRECT
+                self._cells[index].state = CellState.CORRECT
 
             else:
-                self._display.grid[index].state = CellState.WRONG
+                self._cells[index].state = CellState.WRONG
 
     def _move_selected(self, direction: SelectionDirection) -> None:
         # FIXME:  Moving down does wrap around.
@@ -164,7 +180,7 @@ class CrossWords:
         next_selected: int = self._state.selected + jump_size
 
         def is_next_invalid() -> bool:
-            return next_selected >= len(self._display.grid)
+            return next_selected >= len(self._cells)
 
         if is_next_invalid():
             self._state.selected = None
@@ -186,7 +202,7 @@ class CrossWords:
         if self._state.selected is None:
             return
 
-        cell: CellDisplay = self._display.grid[self._state.selected]
+        cell: CellDisplay = self._cells[self._state.selected]
         if cell.state is CellState.CORRECT:
             return
 
@@ -196,62 +212,81 @@ class CrossWords:
     def update(self, delta_time: float) -> None:
         pass
 
-    def _create_display(self) -> BoardDisplay:
-        grid: list[CellDisplay] = []
+    def _create_clues_display(self) -> CluesDisplay:
+        padding: Vector2 = Vector2(self._board.placement.topleft)
+        top_left: Vector2 = Vector2(self._board.placement.topright)
+        top_left.x += padding.x
 
         window_rect: Rect = pygame.display.get_surface().get_rect()
-        min_size: int = min(window_rect.width, window_rect.height)
+        width: int = window_rect.width - top_left.x - padding.x
+        height: int = window_rect.height - padding.y * 2
+        surface: Surface = Surface((width, height))
+        surface.fill("white")
 
+        return CluesDisplay(surface.get_rect(topleft=top_left), surface)
+
+    def _create_cells_display(self) -> list[CellDisplay]:
+        cells: list[CellDisplay] = []
+        rows: int = self._state.puzzle.rows
+        cols: int = self._state.puzzle.cols
+
+        cell_size: Vector2 = CellDisplay.get_size(self._state.puzzle)
+        for row, col in product(range(rows), range(cols)):
+            cell: CellDisplay = CellDisplay(
+                Vector2(col, row),
+                cell_size,
+                (row * cols + col),
+            )
+            font: Font = SysFont(self._font_name, CLUE_ID_FONT_SIZE)
+            cell.draw(self._state, font)
+            cells.append(cell)
+
+        return cells
+
+    def _create_board_display(self) -> BoardDisplay:
+        window_rect: Rect = pygame.display.get_surface().get_rect()
+        min_size: int = min(window_rect.width, window_rect.height) - BOARD_PADDING * 2
         dimensions: Vector2 = Vector2(
             self._state.puzzle.rows,
             self._state.puzzle.cols,
         )
-
-        cell_size: Vector2 = Vector2(min_size) // dimensions.elementwise()
-        for row, col in product(range(int(dimensions.x)), range(int(dimensions.y))):
-            cell: CellDisplay = CellDisplay(
-                Vector2(col, row),
-                cell_size,
-                (row * int(dimensions.y) + col),
-            )
-            font: Font = SysFont(self._font_name, CLUE_ID_FONT_SIZE)
-            cell.draw(self._state, font)
-            grid.append(cell)
-
-        surface: Surface = Surface(cell_size * dimensions.elementwise())
-        placement: Rect = surface.get_rect(center=pygame.display.get_surface().get_rect().center)
-
-        return BoardDisplay(placement, surface, grid)
+        cell_size: Vector2 = CellDisplay.get_size(self._state.puzzle)
+        board_size: Vector2 = cell_size * dimensions.elementwise()
+        surface: Surface = Surface(board_size)
+        left_over: float = min_size - board_size.x
+        placement: Rect = surface.get_rect(topleft=Vector2(BOARD_PADDING + left_over // 2))
+        return BoardDisplay(placement, surface)
 
     def _render_cell(self, cell: CellDisplay, font: Font) -> None:
 
         if self._state.values[cell.index] == VOID_CELL:
             return
 
-        self._display.surface.blit(cell.surface, cell.placement)
+        self._board.surface.blit(cell.surface, cell.placement)
 
         #  Rendering user placed value
         if (value := self._state.values[cell.index]) not in [EMPTY_CELL, VOID_CELL]:
             # FIXME: Probably not a good idea to render value every frame. Do it once when it changes.
             color: str = "blue" if cell.state is CellState.CORRECT else "black"
             value_sign: Surface = font.render(value, True, color, "white")
-            self._display.surface.blit(value_sign, value_sign.get_rect(center=cell.placement.center))
+            self._board.surface.blit(value_sign, value_sign.get_rect(center=cell.placement.center))
 
         if cell.state is CellState.WRONG:
             pad: Vector2 = Vector2(WRONG_PAD)
-            pygame.draw.line(self._display.surface, "red", Vector2(cell.placement.topleft) + pad,
+            pygame.draw.line(self._board.surface, "red", Vector2(cell.placement.topleft) + pad,
                              Vector2(cell.placement.topleft) + Vector2(cell.surface.get_size()) - pad, 3)
 
         #  Rendering hover surface
         if cell.index == self._state.selected:
-            self._display.surface.blit(cell.hover, cell.placement)
+            self._board.surface.blit(cell.hover, cell.placement)
 
     def _get_board_mouse_pos(self) -> Vector2:
-        return Vector2(pygame.mouse.get_pos()) - Vector2(self._display.placement.topleft)
+        return Vector2(pygame.mouse.get_pos()) - Vector2(self._board.placement.topleft)
 
     def render(self) -> None:
         font: Font = SysFont(self._font_name, VALUE_FONT_SIZE)
-        for cell in self._display.grid:
+        for cell in self._cells:
             self._render_cell(cell, font)
 
-        pygame.display.get_surface().blit(self._display.surface, self._display.placement)
+        pygame.display.get_surface().blit(self._clues.surface, self._clues.placement)
+        pygame.display.get_surface().blit(self._board.surface, self._board.placement)
