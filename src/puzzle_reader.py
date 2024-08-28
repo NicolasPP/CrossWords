@@ -34,23 +34,20 @@ class Answers(NamedTuple):
 
 
 class Board(NamedTuple):
-    state: list[str]
     rows: int
     cols: int
 
 
 class Puzzle(NamedTuple):
-    board: Board
+    rows: int
+    cols: int
     answers: Answers
     clues: Clues
 
 
 def create_puzzle(puzzle_data: dict[str, Any]) -> Optional[Puzzle]:
-    board: Board = Board(
-        [cell if cell == VOID_CELL else EMPTY_CELL for cell in puzzle_data["grid"]],
-        puzzle_data["size"]["rows"],
-        puzzle_data["size"]["cols"],
-    )
+    rows: int = int(puzzle_data["size"]["rows"])
+    cols: int = int(puzzle_data["size"]["cols"])
 
     answers_across: dict[int, str] = {}
     clues_across: dict[int, str] = {}
@@ -68,32 +65,33 @@ def create_puzzle(puzzle_data: dict[str, Any]) -> Optional[Puzzle]:
         clues_down[int(id_)] = clue_down
         answers_down[int(id_)] = answer_down
 
-    by_index: dict[int, CellClue] = {_: CellClue() for _ in range(board.cols * board.rows)}
+    state: list[str] = [cell if cell == VOID_CELL else EMPTY_CELL for cell in puzzle_data["grid"]]
+    by_index: dict[int, CellClue] = {_: CellClue() for _ in range(cols * rows)}
     for index, val in enumerate(puzzle_data["gridnums"]):
         if val == 0:
             continue
 
         if val in clues_across:
             next_index: int = index
-            while not board.state[next_index]:
+            while not state[next_index]:
 
                 by_index[next_index].across = val
                 next_index += 1
 
-                if next_index >= board.cols * board.rows:
+                if next_index >= cols * rows:
                     break
 
         if val in clues_down:
             next_index: int = index
-            while not board.state[next_index]:
+            while not state[next_index]:
 
                 by_index[next_index].down = val
-                next_index += board.cols
+                next_index += cols
 
-                if next_index >= board.cols * board.rows:
+                if next_index >= cols * rows:
                     break
 
-    for index, cell in enumerate(board.state):
+    for index, cell in enumerate(state):
         if cell == VOID_CELL:
             continue
 
@@ -116,7 +114,7 @@ def create_puzzle(puzzle_data: dict[str, Any]) -> Optional[Puzzle]:
         puzzle_data["gridnums"]
     )
 
-    return Puzzle(board, answers, clues)
+    return Puzzle(rows, cols, answers, clues)
 
 
 def puzzles() -> Iterator[Puzzle]:

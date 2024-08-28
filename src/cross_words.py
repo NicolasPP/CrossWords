@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+from enum import Enum, auto
+from itertools import product
 from typing import NamedTuple, Optional
 
 import pygame
@@ -8,33 +10,59 @@ from pygame.math import Vector2
 from pygame.rect import Rect
 from pygame.surface import Surface
 
-from puzzle_reader import Puzzle, VOID_CELL
+from puzzle_reader import EMPTY_CELL, Puzzle, VOID_CELL
 
 PADDING: int = 2
 HOVER_ALPHA: int = 50
 
 
-@dataclass(slots=True)
+class SelectionDirection(Enum):
+    RIGHT = auto()
+    DOWN = auto()
+
+
+@dataclass(slots=True, init=False)
+class CrossWordState:
+    puzzle: Puzzle
+    values: list[str]
+    selected: Optional[int]
+
+    def __init__(self, puzzle: Puzzle) -> None:
+        self.puzzle = puzzle
+        self.values = [VOID_CELL if cell == VOID_CELL else EMPTY_CELL
+                       for cell in puzzle.answers.completed]
+        self.selected = None
+
+
+@dataclass(slots=True, init=False)
 class CellDisplay:
     placement: Rect
     surface: Surface
     hover: Surface
     index: int
-    value: Optional[str] = None
 
-    def draw(self, puzzle: Puzzle, font: Font) -> None:
+    def __init__(self, position: Vector2, size: Vector2, index: int) -> None:
+        self.placement = Rect(*(position.elementwise() * size).xy, *size.xy)
+        self.surface = Surface(size)
+        self.hover = Surface(size)
+        self.index = index
+
+        self.hover.fill("black")
+        self.hover.set_alpha(HOVER_ALPHA)
+
+    def draw(self, state: CrossWordState, font: Font) -> None:
 
         size: Vector2 = Vector2(self.surface.get_size())
         padding: Vector2 = Vector2(PADDING)
         content: Surface = Surface(size - padding)
 
-        if puzzle.board.state[self.index] == VOID_CELL:
+        if state.values[self.index] == VOID_CELL:
             self.surface.fill("black")
             return
 
         content.fill("white")
 
-        clue_number: int = puzzle.clues.grid[self.index]
+        clue_number: int = state.puzzle.clues.grid[self.index]
         if clue_number != 0:
             clue_sign: Surface = font.render(
                 str(clue_number),
@@ -56,10 +84,9 @@ class BoardDisplay(NamedTuple):
 class CrossWords:
 
     def __init__(self, puzzle: Puzzle) -> None:
+        self._state: CrossWordState = CrossWordState(puzzle)
         self._font: Font = SysFont(get_fonts()[0], 10)
 
-        self._puzzle: Puzzle = puzzle
-        self._selected: Optional[int] = None
         self._display: BoardDisplay = self._create_display()
 
     def process_input(self, event: Event) -> None:
@@ -67,22 +94,26 @@ class CrossWords:
             mouse_pos: Vector2 = self._get_board_mouse_pos()
             for cell in self._display.grid:
                 if cell.placement.collidepoint(mouse_pos):
-                    if self._puzzle.board.state[cell.index] == VOID_CELL:
+                    if self._state.values[cell.index] == VOID_CELL:
                         return
 
-                    cell_clues = self._puzzle.clues.by_index[cell.index]
-                    print(cell_clues, cell.index, self._puzzle.answers.completed[cell.index], sep=", ")
+                    cell_clues = self._state.puzzle.clues.by_index[cell.index]
+                    print(cell_clues, cell.index, sep=", ")
 
                     if cell_clues.across is not None:
-                        print("Across: ", self._puzzle.clues.across[cell_clues.across])
-                        print("Answer: ", self._puzzle.answers.across[cell_clues.across])
+                        print("Across: ", self._state.puzzle.clues.across[cell_clues.across])
+                        # print("Answer: ", self._state.puzzle.answers.across[cell_clues.across])
 
                     if cell_clues.down is not None:
-                        print("Down: ", self._puzzle.clues.down[cell_clues.down])
-                        print("Answer: ", self._puzzle.answers.down[cell_clues.down])
+                        print("Down: ", self._state.puzzle.clues.down[cell_clues.down])
+                        # print("Answer: ", self._state.puzzle.answers.down[cell_clues.down])
+
+                    if event.button == 3:
+                        print("Across Answer: ", self._state.puzzle.answers.across[cell_clues.across])
+                        print("Down Answer: ", self._state.puzzle.answers.down[cell_clues.down])
 
                     print("----------------------------")
-                    self._selected = cell.index
+                    self._state.selected = cell.index
 
         if event.type == pygame.KEYDOWN:
 
@@ -92,32 +123,41 @@ class CrossWords:
 
             elif event.unicode.isalpha():
                 self._set_selected_value(event.unicode.upper())
-                self._jump_to_next_selected()
+                self._move_selected(SelectionDirection.RIGHT)
                 return
 
-    def _jump_to_next_selected(self) -> None:
-        if self._selected is None:
+    def _move_selected(self, direction: SelectionDirection) -> None:
+        # FIXME:  Moving down does wrap around.
+        if self._state.selected is None:
             return
 
-        next_selected: int = self._selected + 1
-        if next_selected >= len(self._display.grid):
-            self._selected = None
+        jump_size: int = 1 if direction is SelectionDirection.RIGHT else self._state.puzzle.cols
+        next_selected: int = self._state.selected + jump_size
+
+        def is_next_invalid() -> bool:
+            return next_selected >= len(self._display.grid)
+
+        if is_next_invalid():
+            self._state.selected = None
             return
 
-        if self._puzzle.board.state[next_selected] == VOID_CELL:
-            while self._puzzle.board.state[next_selected] == VOID_CELL:
-                next_selected += 1
+        if self._state.values[next_selected] == VOID_CELL:
 
-        if next_selected >= len(self._display.grid):
-            self._selected = None
-        else:
-            self._selected = next_selected
+            # move until it's not VOID_CELL
+            while self._state.values[next_selected] == VOID_CELL:
+                next_selected += jump_size
+
+            if is_next_invalid():
+                self._state.selected = None
+                return
+
+        self._state.selected = next_selected
 
     def _set_selected_value(self, value: Optional[str]) -> None:
-        if self._selected is None:
+        if self._state.selected is None:
             return
 
-        self._display.grid[self._selected].value = value
+        self._state.values[self._state.selected] = value
 
     def update(self, delta_time: float) -> None:
         pass
@@ -127,40 +167,40 @@ class CrossWords:
 
         window_rect: Rect = pygame.display.get_surface().get_rect()
         min_size: int = min(window_rect.width, window_rect.height)
-        size: int = min_size // self._puzzle.board.rows
-        actual_size: int = size * self._puzzle.board.rows
-        surface: Surface = Surface((actual_size, actual_size))
-        placement: Rect = surface.get_rect(center=pygame.display.get_surface().get_rect().center)
 
-        for row in range(self._puzzle.board.rows):
-            for col in range(self._puzzle.board.cols):
-                hover: Surface = Surface((size, size))
-                hover.fill("black")
-                hover.set_alpha(HOVER_ALPHA)
-                cell: CellDisplay = CellDisplay(
-                    Rect(col * size, row * size, size, size),
-                    Surface((size, size)),
-                    hover,
-                    (row * self._puzzle.board.cols + col),
-                )
-                cell.draw(self._puzzle, self._font)
-                grid.append(cell)
+        dimensions: Vector2 = Vector2(
+            self._state.puzzle.rows,
+            self._state.puzzle.cols,
+        )
+
+        cell_size: Vector2 = Vector2(min_size) // dimensions.elementwise()
+        for row, col in product(range(int(dimensions.x)), range(int(dimensions.y))):
+            cell: CellDisplay = CellDisplay(
+                Vector2(col, row),
+                cell_size,
+                (row * int(dimensions.y) + col),
+            )
+            cell.draw(self._state, self._font)
+            grid.append(cell)
+
+        surface: Surface = Surface(cell_size * dimensions.elementwise())
+        placement: Rect = surface.get_rect(center=pygame.display.get_surface().get_rect().center)
 
         return BoardDisplay(placement, surface, grid)
 
     def _render_cell(self, cell: CellDisplay) -> None:
 
-        if self._puzzle.board.state[cell.index] == VOID_CELL:
+        if self._state.values[cell.index] == VOID_CELL:
             return
 
         self._display.surface.blit(cell.surface, cell.placement)
 
-        if cell.value is not None:
-            value_sign: Surface = self._font.render(cell.value, True, "black", "white")
+        if (value := self._state.values[cell.index]) not in [EMPTY_CELL, VOID_CELL]:
+            value_sign: Surface = self._font.render(value, True, "black", "white")
             self._display.surface.blit(value_sign, value_sign.get_rect(center=cell.placement.center))
 
         #  Rendering hover surface
-        if cell.index == self._selected:
+        if cell.index == self._state.selected:
             self._display.surface.blit(cell.hover, cell.placement)
 
     def _get_board_mouse_pos(self) -> Vector2:
