@@ -118,7 +118,7 @@ class CrossWords:
         if event.type == pygame.KEYDOWN:
 
             if event.key == pygame.K_BACKSPACE:
-                self._set_selected_value(None)
+                self._set_selected_value(EMPTY_CELL)
                 return
 
             elif event.unicode.isalpha():
@@ -153,7 +153,7 @@ class CrossWords:
 
         self._state.selected = next_selected
 
-    def _set_selected_value(self, value: Optional[str]) -> None:
+    def _set_selected_value(self, value: str) -> None:
         if self._state.selected is None:
             return
 
