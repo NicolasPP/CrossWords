@@ -39,6 +39,8 @@ class Board(NamedTuple):
 
 
 class Puzzle(NamedTuple):
+    title: str
+    date: str
     rows: int
     cols: int
     answers: Answers
@@ -114,7 +116,14 @@ def create_puzzle(puzzle_data: dict[str, Any]) -> Optional[Puzzle]:
         puzzle_data["gridnums"]
     )
 
-    return Puzzle(rows, cols, answers, clues)
+    return Puzzle(
+        puzzle_data["title"],
+        puzzle_data["date"],
+        rows,
+        cols,
+        answers,
+        clues
+    )
 
 
 def puzzles() -> Iterator[Puzzle]:

@@ -1,3 +1,4 @@
+import math
 from dataclasses import dataclass
 from enum import Enum, auto
 from itertools import product
@@ -18,6 +19,8 @@ WRONG_PAD: int = 7
 VALUE_FONT_SIZE: int = 20
 CLUE_ID_FONT_SIZE: int = 10
 BOARD_PADDING: int = 6
+TITLE_FONT_SIZE: int = 30
+DATE_FONT_SIZE: int = 15
 
 
 class SelectionDirection(Enum):
@@ -102,6 +105,9 @@ class CellDisplay:
 class MetadataDisplay:
     placement: Rect
     surface: Surface
+
+    title: Surface
+    date: Surface
 
 
 class BoardDisplay(NamedTuple):
@@ -223,7 +229,24 @@ class CrossWords:
         surface: Surface = Surface((width, height))
         surface.fill("white")
 
-        return MetadataDisplay(surface.get_rect(topleft=top_left), surface)
+        title_font_size: int = get_desired_font_size(self._font_name, self._state.puzzle.title,
+                                                     math.floor(width * 0.7))
+        title_font: Font = SysFont(self._font_name, title_font_size)
+        title: Surface = title_font.render(self._state.puzzle.title, True, "black", "white")
+
+        date_font_size: int = get_desired_font_size(self._font_name, self._state.puzzle.date,
+                                                    math.floor(width * 0.2))
+        date_font: Font = SysFont(self._font_name, date_font_size)
+        date: Surface = date_font.render(self._state.puzzle.date, True, "black", "white")
+
+        title_placement: Rect = title.get_rect(midtop=(width // 2, padding.y))
+        surface.blit(title, title_placement)
+
+        date_placement: Rect = date.get_rect(midtop=title_placement.midbottom)
+        date_placement.y += padding.y
+        surface.blit(date, date_placement)
+
+        return MetadataDisplay(surface.get_rect(topleft=top_left), surface, title, date)
 
     def _create_cells_display(self) -> list[CellDisplay]:
         cells: list[CellDisplay] = []
@@ -290,3 +313,21 @@ class CrossWords:
 
         pygame.display.get_surface().blit(self._clues.surface, self._clues.placement)
         pygame.display.get_surface().blit(self._board.surface, self._board.placement)
+
+
+def get_desired_font_size(font_name: str, text: str, desired_width: int) -> Optional[int]:
+    font_size: int = 1
+    font: Font = SysFont(font_name, font_size)
+
+    def get_render_size() -> Vector2:
+        return Vector2(font.size(text))
+
+    render_size: Vector2 = get_render_size()
+
+    while render_size.x < desired_width:
+        font_size += 1
+
+        font = SysFont(font_name, font_size)
+        render_size = get_render_size()
+
+    return font_size
