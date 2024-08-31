@@ -99,7 +99,7 @@ class CellDisplay:
 
 
 @dataclass(slots=True)
-class CluesDisplay:
+class MetadataDisplay:
     placement: Rect
     surface: Surface
 
@@ -117,7 +117,7 @@ class CrossWords:
 
         self._cells: list[CellDisplay] = self._create_cells_display()
         self._board: BoardDisplay = self._create_board_display()
-        self._clues: CluesDisplay = self._create_clues_display()
+        self._clues: MetadataDisplay = self._create_metadata_display()
 
     def process_input(self, event: Event) -> None:
         if event.type == pygame.MOUSEBUTTONDOWN:
@@ -212,7 +212,7 @@ class CrossWords:
     def update(self, delta_time: float) -> None:
         pass
 
-    def _create_clues_display(self) -> CluesDisplay:
+    def _create_metadata_display(self) -> MetadataDisplay:
         padding: Vector2 = Vector2(self._board.placement.topleft)
         top_left: Vector2 = Vector2(self._board.placement.topright)
         top_left.x += padding.x
@@ -223,7 +223,7 @@ class CrossWords:
         surface: Surface = Surface((width, height))
         surface.fill("white")
 
-        return CluesDisplay(surface.get_rect(topleft=top_left), surface)
+        return MetadataDisplay(surface.get_rect(topleft=top_left), surface)
 
     def _create_cells_display(self) -> list[CellDisplay]:
         cells: list[CellDisplay] = []
