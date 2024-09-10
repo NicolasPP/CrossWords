@@ -1,5 +1,6 @@
 import math
 from dataclasses import dataclass
+from itertools import chain
 from typing import Optional
 
 import pygame
@@ -11,8 +12,10 @@ from pygame.surface import Surface
 from cross_word_state import CrossWordState
 from puzzle_reader import Clues
 
+LINE_SEP: int = 2
 
-@dataclass(slots=True, init=False)
+
+@dataclass(slots=True)
 class ClueDisplay:
     surface: Surface
     placement: Rect
@@ -27,12 +30,97 @@ class ClueSet:
     surface: Surface
     clues: list[ClueDisplay]
 
-    def __init__(self, window: Surface, window_placement: Rect, clue_set: dict[int, str]) -> None:
+    def __init__(self, window: Surface, window_placement: Rect, clue_set: dict[int, str], font: Font) -> None:
         self.window = window
         self.window_placement = window_placement
+        self.clues = []
 
-        self.surface = create_clues_surface(window.get_width(), clue_set)
-        self.window.blit(self.surface, (0, 0))
+        split_clues: list[list[str]] = [split_text(cl, window.get_width(), font) for cl in clue_set.values()]
+        surface: Surface = Surface((
+            window.get_width(),
+            sum([Vector2(font.size(line)).y for line in chain.from_iterable(split_clues)])
+        ))
+        surface.fill("white")
+
+        prev_placement: Optional[Rect] = None
+        for clue in split_clues:
+
+            clue_surface: Surface = multi_line_render(clue, window.get_width(), font)
+            placement: Rect = clue_surface.get_rect(topleft=(0, 0))
+
+            if prev_placement is not None:
+                placement = clue_surface.get_rect(topleft=prev_placement.bottomleft)
+                placement.y += LINE_SEP * 4
+
+            self.clues.append((ClueDisplay(clue_surface, placement)))
+            prev_placement = placement
+
+        for clue_display in self.clues:
+            surface.blit(clue_display.surface, clue_display.placement)
+
+        self.surface = surface
+
+
+def multi_line_render(lines: list[str], max_width: int, font: Font) -> Surface:
+    surface: Surface = Surface((
+        max_width,
+        sum([Vector2(font.size(ln)).y for ln in lines]) + LINE_SEP,
+    ))
+    surface.fill("white")
+    prev_placement: Optional[Rect] = None
+    for line in lines:
+        surf: Surface = font.render(line, True, "black")
+
+        placement: Rect = surf.get_rect(topleft=(0, 0))
+        if prev_placement is not None:
+            placement = surf.get_rect(topleft=prev_placement.bottomleft)
+            placement.y += LINE_SEP
+
+        surface.blit(surf, placement)
+        prev_placement = placement
+
+    return surface
+
+
+def split_text(text: str, max_width: int, font: Font) -> list[str]:
+    lines: list[str] = []
+    line: str = ""
+
+    def get_render_size(data: str) -> Vector2:
+        return Vector2(font.size(data))
+
+    for word in text.split():
+        sep: str = " " if line else ""
+        next_line: str = line + sep + word
+
+        render_size: Vector2 = get_render_size(next_line)
+        if render_size.x > max_width:
+            lines.append(line)
+            line = word
+
+        else:
+            line = next_line
+
+    if line not in lines:
+        lines.append(line)
+
+    return lines
+
+
+def get_max_size(longest: str, max_lines: int, font_name: str, max_width) -> int:
+    size: int = 0
+    font: Font = SysFont(font_name, size)
+
+    def get_render_size() -> Vector2:
+        return Vector2(font.size(longest))
+
+    render_size: Vector2 = get_render_size()
+    while (render_size.x // max_width) < max_lines:
+        size += 1
+        font = SysFont(font_name, size)
+        render_size = get_render_size()
+
+    return size
 
 
 @dataclass(slots=True, init=False)
@@ -48,7 +136,7 @@ class CluesDisplay:
             parent.get_width() - padding.x * 2,
             parent.get_height() - Vector2(date_placement.midbottom).y - padding.y * 2
         ))
-        surface.fill("red")
+        surface.fill("white")
 
         placement: Rect = surface.get_rect(midtop=date_placement.midbottom)
         placement.y += padding.y
@@ -58,30 +146,31 @@ class CluesDisplay:
             surface.get_height() - (padding.y * 2)
         )
 
+        max_lines: int = 2
+        longest_clue: str = max(
+            list(clues.across.values()) + list(clues.down.values()),
+            key=lambda clue: len(clue)
+        )
+        font_name: str = get_fonts()[0]
+        clue_font_size: int = get_max_size(longest_clue, max_lines, font_name, size.x)
+        clue_font: Font = SysFont(font_name, clue_font_size)
+
         across_window: Surface = Surface(size)
-        across_window.fill("green")
+        across_window.fill("white")
         across_placement: Rect = across_window.get_rect(topleft=padding)
-        across: ClueSet = ClueSet(across_window, across_placement, clues.across)
-        surface.blit(across.window, across.window_placement)
+        across: ClueSet = ClueSet(across_window, across_placement, clues.across, clue_font)
 
         down_window: Surface = Surface(size)
-        down_window.fill("yellow")
+        down_window.fill("white")
         down_placement: Rect = down_window.get_rect(topleft=across.window_placement.topright)
         down_placement.x += padding.x
-        down: ClueSet = ClueSet(down_window, down_placement, clues.down)
-        surface.blit(down.window, down.window_placement)
+        down: ClueSet = ClueSet(down_window, down_placement, clues.down, clue_font)
 
         self.surface = surface
         self.placement = placement
 
         self.across = across
         self.down = down
-
-
-def create_clues_surface(width: int, clues: dict[int, str]) -> Surface:
-    surface: Surface = Surface((width, width))
-    surface.fill("purple")
-    return surface
 
 
 @dataclass(slots=True, init=False)
@@ -140,7 +229,6 @@ class MetadataDisplay:
             surface.blit(date, date_placement)
 
         clues_display: CluesDisplay = CluesDisplay(surface, date_placement, padding, state.puzzle.clues)
-        surface.blit(clues_display.surface, clues_display.placement)
 
         self.is_default_title = is_default_title
 
@@ -154,6 +242,15 @@ class MetadataDisplay:
         self.date_placement = date_placement
 
         self.clues_display = clues_display
+
+    def render(self) -> None:
+        self.clues_display.across.window.blit(self.clues_display.across.surface, (0, 0))
+        self.clues_display.down.window.blit(self.clues_display.down.surface, (0, 0))
+
+        self.clues_display.surface.blit(self.clues_display.across.window, self.clues_display.across.window_placement)
+        self.clues_display.surface.blit(self.clues_display.down.window, self.clues_display.down.window_placement)
+
+        self.surface.blit(self.clues_display.surface, self.clues_display.placement)
 
 
 def get_desired_font_size(font_name: str, text: str, desired_width: int) -> Optional[int]:

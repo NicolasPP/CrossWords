@@ -168,5 +168,7 @@ class CrossWords:
         for cell in self._cells:
             self._render_cell(cell, font)
 
+        self._metadata.render()
+
         pygame.display.get_surface().blit(self._metadata.surface, self._metadata.placement)
         pygame.display.get_surface().blit(self._board.surface, self._board.placement)
