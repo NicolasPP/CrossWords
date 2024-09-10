@@ -1,5 +1,5 @@
 DATA_PATH: str = r"data\2013"
-WINDOW_WIDTH: int = 1100
+WINDOW_WIDTH: int = 1180
 WINDOW_HEIGHT: int = 800
 PADDING: int = 2
 HOVER_ALPHA: int = 50

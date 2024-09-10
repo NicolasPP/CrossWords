@@ -12,6 +12,53 @@ from cross_word_state import CrossWordState
 
 
 @dataclass(slots=True, init=False)
+class CluesDisplay:
+    surface: Surface
+    placement: Rect
+
+    across_window: Surface
+    across_placement: Rect
+
+    down_window: Surface
+    down_placement: Rect
+
+    def __init__(self, parent: Surface, date_placement: Rect, padding: Vector2) -> None:
+        height: int = parent.get_height() - Vector2(date_placement.midbottom).y - padding.y * 2
+        surface: Surface = Surface((parent.get_width() - padding.x * 2, height))
+
+        surface.fill("red")
+
+        placement: Rect = surface.get_rect(midtop=date_placement.midbottom)
+        placement.y += padding.y
+
+        size: Vector2 = Vector2(
+            (surface.get_width() - (padding.x * 3)) // 2,
+            surface.get_height() - (padding.y * 2)
+        )
+
+        across_window: Surface = Surface(size)
+        across_window.fill("green")
+        across_placement: Rect = across_window.get_rect(topleft=padding)
+
+        down_window: Surface = Surface(size)
+        down_window.fill("yellow")
+        down_placement: Rect = down_window.get_rect(topleft=across_placement.topright)
+        down_placement.x += padding.x
+
+        surface.blit(across_window, across_placement)
+        surface.blit(down_window, down_placement)
+
+        self.surface = surface
+        self.placement = placement
+
+        self.across_window = across_window
+        self.across_placement = across_placement
+
+        self.down_window = down_window
+        self.down_placement = down_placement
+
+
+@dataclass(slots=True, init=False)
 class MetadataDisplay:
     is_default_title: bool
 
@@ -24,8 +71,7 @@ class MetadataDisplay:
     date: Surface
     date_placement: Rect
 
-    clues: Surface
-    clues_placement: Rect
+    clues: CluesDisplay
 
     def __init__(self, board_placement: Rect, state: CrossWordState) -> None:
         window_rect: Rect = pygame.display.get_surface().get_rect()
@@ -67,12 +113,8 @@ class MetadataDisplay:
             date_placement.y += padding.y
             surface.blit(date, date_placement)
 
-        clues_height: int = surface.get_height() - Vector2(date_placement.midbottom).y - padding.y * 2
-        clues: Surface = Surface((surface.get_width() - padding.x * 2, clues_height))
-        clues_placement: Rect = clues.get_rect(midtop=date_placement.midbottom)
-        clues_placement.y += padding.y
-
-        surface.blit(clues, clues_placement)
+        clues: CluesDisplay = CluesDisplay(surface, date_placement, padding)
+        surface.blit(clues.surface, clues.placement)
 
         self.is_default_title = is_default_title
 
@@ -86,7 +128,6 @@ class MetadataDisplay:
         self.date_placement = date_placement
 
         self.clues = clues
-        self.clues_placement = clues_placement
 
 
 def get_desired_font_size(font_name: str, text: str, desired_width: int) -> Optional[int]:
