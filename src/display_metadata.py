@@ -1,6 +1,5 @@
 import math
 from dataclasses import dataclass
-from itertools import chain
 from typing import Optional
 
 import pygame
@@ -19,6 +18,7 @@ LINE_SEP: int = 2
 class ClueDisplay:
     surface: Surface
     placement: Rect
+    id: int
 
 
 @dataclass(slots=True, init=False)
@@ -35,16 +35,10 @@ class ClueSet:
         self.window_placement = window_placement
         self.clues = []
 
-        split_clues: list[list[str]] = [split_text(cl, window.get_width(), font) for cl in clue_set.values()]
-        surface: Surface = Surface((
-            window.get_width(),
-            sum([Vector2(font.size(line)).y for line in chain.from_iterable(split_clues)])
-        ))
-        surface.fill("white")
-
         prev_placement: Optional[Rect] = None
-        for clue in split_clues:
+        for id_, raw_clue in clue_set.items():
 
+            clue: list[str] = split_text(raw_clue, window.get_width(), font)
             clue_surface: Surface = multi_line_render(clue, window.get_width(), font)
             placement: Rect = clue_surface.get_rect(topleft=(0, 0))
 
@@ -52,13 +46,30 @@ class ClueSet:
                 placement = clue_surface.get_rect(topleft=prev_placement.bottomleft)
                 placement.y += LINE_SEP * 4
 
-            self.clues.append((ClueDisplay(clue_surface, placement)))
+            self.clues.append((ClueDisplay(clue_surface, placement, id_)))
             prev_placement = placement
+
+        surface: Surface = Surface((
+            window.get_width(),
+            Vector2(prev_placement.midbottom).y
+        ))
+        surface.fill("white")
 
         for clue_display in self.clues:
             surface.blit(clue_display.surface, clue_display.placement)
 
         self.surface = surface
+
+    def get_collided(self, mouse_pos) -> Optional[ClueDisplay]:
+        if not self.window_placement.collidepoint(mouse_pos):
+            return None
+
+        mouse_pos -= self.window_placement.topleft
+        for clue in self.clues:
+            if clue.placement.collidepoint(mouse_pos):
+                return clue
+
+        return None
 
 
 def multi_line_render(lines: list[str], max_width: int, font: Font) -> Surface:

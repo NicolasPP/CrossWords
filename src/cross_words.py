@@ -2,6 +2,7 @@ from enum import Enum, auto
 from itertools import product
 
 import pygame
+from pygame import mouse
 from pygame.event import Event
 from pygame.font import Font, SysFont, get_fonts
 from pygame.math import Vector2
@@ -43,31 +44,36 @@ class CrossWords:
             cell.draw(self._state, font)
             self._cells.append(cell)
 
+    def _process_metadata_click(self, event: Event) -> None:
+        mouse_pos: Vector2 = Vector2(pygame.mouse.get_pos()) - Vector2(self._metadata.placement.topleft)
+        if not self._metadata.clues_display.placement.collidepoint(mouse_pos):
+            return
+
+        mouse_pos -= self._metadata.clues_display.placement.topleft
+
+        if (across_clue := self._metadata.clues_display.across.get_collided(mouse_pos)) is not None:
+            print(self._state.puzzle.clues.across[across_clue.id])
+
+        if (down_clue := self._metadata.clues_display.down.get_collided(mouse_pos)) is not None:
+            print(self._state.puzzle.clues.down[down_clue.id])
+
+    def _process_board_click(self, event: Event) -> None:
+        mouse_pos: Vector2 = Vector2(pygame.mouse.get_pos()) - Vector2(self._board.placement.topleft)
+        for cell in self._cells:
+            if cell.placement.collidepoint(mouse_pos):
+                if self._state.values[cell.index] == VOID_CELL:
+                    return
+
+                self._state.selected = cell.index
+
     def process_input(self, event: Event) -> None:
         if event.type == pygame.MOUSEBUTTONDOWN:
-            mouse_pos: Vector2 = self._get_board_mouse_pos()
-            for cell in self._cells:
-                if cell.placement.collidepoint(mouse_pos):
-                    if self._state.values[cell.index] == VOID_CELL:
-                        return
+            mouse_pos: Vector2 = Vector2(mouse.get_pos())
+            if self._board.placement.collidepoint(mouse_pos):
+                self._process_board_click(event)
 
-                    cell_clues = self._state.puzzle.clues.by_index[cell.index]
-                    print(cell_clues, cell.index, sep=", ")
-
-                    if cell_clues.across is not None:
-                        print("Across: ", self._state.puzzle.clues.across[cell_clues.across])
-                        # print("Answer: ", self._state.puzzle.answers.across[cell_clues.across])
-
-                    if cell_clues.down is not None:
-                        print("Down: ", self._state.puzzle.clues.down[cell_clues.down])
-                        # print("Answer: ", self._state.puzzle.answers.down[cell_clues.down])
-
-                    if event.button == 3:
-                        print("Across Answer: ", self._state.puzzle.answers.across[cell_clues.across])
-                        print("Down Answer: ", self._state.puzzle.answers.down[cell_clues.down])
-
-                    print("----------------------------")
-                    self._state.selected = cell.index
+            if self._metadata.placement.collidepoint(mouse_pos):
+                self._process_metadata_click(event)
 
         if event.type == pygame.KEYDOWN:
 
@@ -158,9 +164,6 @@ class CrossWords:
         #  Rendering hover surface
         if cell.index == self._state.selected:
             self._board.surface.blit(cell.hover, cell.placement)
-
-    def _get_board_mouse_pos(self) -> Vector2:
-        return Vector2(pygame.mouse.get_pos()) - Vector2(self._board.placement.topleft)
 
     def render(self) -> None:
         # TODO: dont create a font every iteration
