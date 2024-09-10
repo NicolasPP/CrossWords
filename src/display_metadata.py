@@ -1,5 +1,5 @@
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Optional
 
@@ -9,10 +9,9 @@ from pygame.math import Vector2
 from pygame.rect import Rect
 from pygame.surface import Surface
 
+from config import HOVER_ALPHA, LINE_SEP
 from cross_word_state import CrossWordState
 from puzzle_reader import Clues
-
-LINE_SEP: int = 2
 
 
 class ScrollDirection(Enum):
@@ -25,6 +24,14 @@ class ClueDisplay:
     surface: Surface
     placement: Rect
     id: int
+    is_selected: bool = field(init=False)
+    hover_surface: Surface = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.is_selected = False
+        self.hover_surface = Surface(self.surface.get_size())
+        self.hover_surface.fill("black")
+        self.hover_surface.set_alpha(HOVER_ALPHA)
 
 
 @dataclass(slots=True, init=False)
@@ -69,6 +76,10 @@ class ClueSet:
         self.surface = surface
         self.scroll_pos = Vector2(0)
 
+    def clear_selection(self) -> None:
+        for clue in self.clues:
+            clue.is_selected = False
+
     def get_collided(self, mouse_pos: Vector2) -> Optional[ClueDisplay]:
         if not self.window_placement.collidepoint(mouse_pos):
             return None
@@ -80,6 +91,16 @@ class ClueSet:
                 return clue
 
         return None
+
+    def render_selected(self) -> None:
+        for clue in self.clues:
+            if not clue.is_selected:
+                continue
+
+            self.window.blit(
+                clue.hover_surface,
+                clue.placement.topleft + self.scroll_pos
+            )
 
     def scroll(self, direction: ScrollDirection) -> None:
         dir_mult: int = 1 if direction == ScrollDirection.UP else -1
@@ -207,6 +228,11 @@ class CluesDisplay:
         self.across = across
         self.down = down
 
+    def set_selected(self, clue: ClueDisplay) -> None:
+        self.across.clear_selection()
+        self.down.clear_selection()
+        clue.is_selected = True
+
 
 @dataclass(slots=True, init=False)
 class MetadataDisplay:
@@ -283,6 +309,9 @@ class MetadataDisplay:
         self.clues_display.down.window.fill("white")
         self.clues_display.across.window.blit(self.clues_display.across.surface, self.clues_display.across.scroll_pos)
         self.clues_display.down.window.blit(self.clues_display.down.surface, self.clues_display.down.scroll_pos)
+
+        self.clues_display.across.render_selected()
+        self.clues_display.down.render_selected()
 
         self.clues_display.surface.blit(self.clues_display.across.window, self.clues_display.across.window_placement)
         self.clues_display.surface.blit(self.clues_display.down.window, self.clues_display.down.window_placement)

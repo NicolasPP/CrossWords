@@ -9,3 +9,4 @@ CLUE_ID_FONT_SIZE: int = 10
 BOARD_PADDING: int = 6
 TITLE_FONT_SIZE: int = 30
 DATE_FONT_SIZE: int = 15
+LINE_SEP: int = 2
