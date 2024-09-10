@@ -1,122 +1,23 @@
-import math
-from dataclasses import dataclass
 from enum import Enum, auto
 from itertools import product
-from typing import NamedTuple, Optional
 
 import pygame
 from pygame.event import Event
 from pygame.font import Font, SysFont, get_fonts
 from pygame.math import Vector2
-from pygame.rect import Rect
 from pygame.surface import Surface
 
+from config import CLUE_ID_FONT_SIZE, VALUE_FONT_SIZE, WRONG_PAD
+from cross_word_state import CrossWordState
+from display_board import BoardDisplay
+from display_cell import CellDisplay, CellState
+from display_metadata import MetadataDisplay
 from puzzle_reader import EMPTY_CELL, Puzzle, VOID_CELL
-
-PADDING: int = 2
-HOVER_ALPHA: int = 50
-WRONG_PAD: int = 7
-VALUE_FONT_SIZE: int = 20
-CLUE_ID_FONT_SIZE: int = 10
-BOARD_PADDING: int = 6
-TITLE_FONT_SIZE: int = 30
-DATE_FONT_SIZE: int = 15
 
 
 class SelectionDirection(Enum):
     RIGHT = auto()
     DOWN = auto()
-
-
-class CellState(Enum):
-    EMPTY = auto()
-    FILLED = auto()
-    CORRECT = auto()
-    WRONG = auto()
-
-
-@dataclass(slots=True, init=False)
-class CrossWordState:
-    puzzle: Puzzle
-    values: list[str]
-    locked_in: list[bool]
-    selected: Optional[int]
-
-    def __init__(self, puzzle: Puzzle) -> None:
-        self.puzzle = puzzle
-        self.values = [VOID_CELL if cell == VOID_CELL else EMPTY_CELL
-                       for cell in puzzle.answers.completed]
-        self.locked_in = [False] * (puzzle.rows * puzzle.cols)
-        self.selected = None
-
-
-@dataclass(slots=True, init=False)
-class CellDisplay:
-
-    @staticmethod
-    def get_size(puzzle: Puzzle) -> Vector2:
-        window_rect: Rect = pygame.display.get_surface().get_rect()
-        min_size: int = min(window_rect.width, window_rect.height) - BOARD_PADDING * 2
-        dimensions: Vector2 = Vector2(puzzle.rows, puzzle.cols)
-        return Vector2(min_size) // dimensions.elementwise()
-
-    placement: Rect
-    surface: Surface
-    hover: Surface
-    index: int
-    state: CellState
-
-    def __init__(self, position: Vector2, size: Vector2, index: int) -> None:
-        self.placement = Rect(*(position.elementwise() * size).xy, *size.xy)
-        self.surface = Surface(size)
-        self.hover = Surface(size)
-        self.index = index
-        self.state = CellState.EMPTY
-
-        self.hover.fill("black")
-        self.hover.set_alpha(HOVER_ALPHA)
-
-    def draw(self, state: CrossWordState, font: Font) -> None:
-
-        size: Vector2 = Vector2(self.surface.get_size())
-        padding: Vector2 = Vector2(PADDING)
-        content: Surface = Surface(size - padding)
-
-        if state.values[self.index] == VOID_CELL:
-            self.surface.fill("black")
-            return
-
-        content.fill("white")
-
-        clue_number: int = state.puzzle.clues.grid[self.index]
-        if clue_number != 0:
-            clue_sign: Surface = font.render(
-                str(clue_number),
-                True,
-                "black",
-                "white"
-            )
-            content.blit(clue_sign, padding)
-
-        self.surface.blit(content, content.get_rect(center=self.surface.get_rect().center))
-
-
-@dataclass(slots=True)
-class MetadataDisplay:
-    placement: Rect
-    surface: Surface
-    is_default_title: bool
-
-    title: Surface
-    title_placement: Rect
-
-    date: Surface
-    date_placement: Rect
-
-
-class BoardDisplay(NamedTuple):
-    placement: Rect
-    surface: Surface
 
 
 class CrossWords:
@@ -125,9 +26,22 @@ class CrossWords:
         self._state: CrossWordState = CrossWordState(puzzle)
         self._font_name: str = get_fonts()[0]
 
-        self._cells: list[CellDisplay] = self._create_cells_display()
-        self._board: BoardDisplay = self._create_board_display()
-        self._metadata: MetadataDisplay = self._create_metadata_display()
+        self._board: BoardDisplay = BoardDisplay(self._state, CellDisplay.get_size(self._state.puzzle))
+        self._metadata: MetadataDisplay = MetadataDisplay(self._board.placement, self._state)
+
+        self._cells: list[CellDisplay] = []
+        rows: int = self._state.puzzle.rows
+        cols: int = self._state.puzzle.cols
+        cell_size: Vector2 = CellDisplay.get_size(self._state.puzzle)
+        for row, col in product(range(rows), range(cols)):
+            cell: CellDisplay = CellDisplay(
+                Vector2(col, row),
+                cell_size,
+                (row * cols + col),
+            )
+            font: Font = SysFont(self._font_name, CLUE_ID_FONT_SIZE)
+            cell.draw(self._state, font)
+            self._cells.append(cell)
 
     def process_input(self, event: Event) -> None:
         if event.type == pygame.MOUSEBUTTONDOWN:
@@ -222,88 +136,6 @@ class CrossWords:
     def update(self, delta_time: float) -> None:
         pass
 
-    def _create_metadata_display(self) -> MetadataDisplay:
-        padding: Vector2 = Vector2(self._board.placement.topleft)
-        top_left: Vector2 = Vector2(self._board.placement.topright)
-        top_left.x += padding.x
-
-        window_rect: Rect = pygame.display.get_surface().get_rect()
-        width: int = window_rect.width - top_left.x - padding.x
-        height: int = window_rect.height - padding.y * 2
-        surface: Surface = Surface((width, height))
-        surface.fill("white")
-        is_default_title: bool = self._state.puzzle.title.startswith("NY TIMES")
-
-        title_font_size: int = get_desired_font_size(self._font_name, self._state.puzzle.title,
-                                                     math.floor(width * 0.6))
-        title_font: Font = SysFont(self._font_name, title_font_size)
-        title: Surface = title_font.render(self._state.puzzle.title, True, "black", "white")
-
-        date_width_factor: float = 0.4 if is_default_title else 0.2
-        date_font_size: int = get_desired_font_size(self._font_name, self._state.puzzle.date,
-                                                    math.floor(width * date_width_factor))
-        date_font: Font = SysFont(self._font_name, date_font_size)
-        date: Surface = date_font.render(self._state.puzzle.date, True, "black", "white")
-
-        title_placement: Rect = title.get_rect(midtop=(width // 2, padding.y))
-
-        date_rect_dest: dict[str, tuple[float, float]] = \
-            {"midtop": (width // 2, padding.y)} if is_default_title else {"midtop": title_placement.midbottom}
-        date_placement: Rect = date.get_rect(**date_rect_dest)
-        print(date_placement)
-
-        if is_default_title:
-            surface.blit(date, date_placement)
-
-        else:
-            surface.blit(title, title_placement)
-            date_placement.y += padding.y
-            surface.blit(date, date_placement)
-
-        return MetadataDisplay(
-            surface.get_rect(topleft=top_left),
-            surface,
-            is_default_title,
-
-            title,
-            title_placement,
-
-            date,
-            date_placement
-        )
-
-    def _create_cells_display(self) -> list[CellDisplay]:
-        cells: list[CellDisplay] = []
-        rows: int = self._state.puzzle.rows
-        cols: int = self._state.puzzle.cols
-
-        cell_size: Vector2 = CellDisplay.get_size(self._state.puzzle)
-        for row, col in product(range(rows), range(cols)):
-            cell: CellDisplay = CellDisplay(
-                Vector2(col, row),
-                cell_size,
-                (row * cols + col),
-            )
-            font: Font = SysFont(self._font_name, CLUE_ID_FONT_SIZE)
-            cell.draw(self._state, font)
-            cells.append(cell)
-
-        return cells
-
-    def _create_board_display(self) -> BoardDisplay:
-        window_rect: Rect = pygame.display.get_surface().get_rect()
-        min_size: int = min(window_rect.width, window_rect.height) - BOARD_PADDING * 2
-        dimensions: Vector2 = Vector2(
-            self._state.puzzle.rows,
-            self._state.puzzle.cols,
-        )
-        cell_size: Vector2 = CellDisplay.get_size(self._state.puzzle)
-        board_size: Vector2 = cell_size * dimensions.elementwise()
-        surface: Surface = Surface(board_size)
-        left_over: float = min_size - board_size.x
-        placement: Rect = surface.get_rect(topleft=Vector2(BOARD_PADDING + left_over // 2))
-        return BoardDisplay(placement, surface)
-
     def _render_cell(self, cell: CellDisplay, font: Font) -> None:
 
         if self._state.values[cell.index] == VOID_CELL:
@@ -338,21 +170,3 @@ class CrossWords:
 
         pygame.display.get_surface().blit(self._metadata.surface, self._metadata.placement)
         pygame.display.get_surface().blit(self._board.surface, self._board.placement)
-
-
-def get_desired_font_size(font_name: str, text: str, desired_width: int) -> Optional[int]:
-    font_size: int = 1
-    font: Font = SysFont(font_name, font_size)
-
-    def get_render_size() -> Vector2:
-        return Vector2(font.size(text))
-
-    render_size: Vector2 = get_render_size()
-
-    while render_size.x < desired_width:
-        font_size += 1
-
-        font = SysFont(font_name, font_size)
-        render_size = get_render_size()
-
-    return font_size
