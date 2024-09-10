@@ -14,7 +14,7 @@ from cross_word_state import CrossWordState
 from display_board import BoardDisplay
 from display_cell import CellDisplay, CellState
 from display_metadata import MetadataDisplay, ScrollDirection
-from puzzle_reader import EMPTY_CELL, Puzzle, VOID_CELL
+from puzzle_reader import CellClue, EMPTY_CELL, Puzzle, VOID_CELL
 
 
 class SelectionDirection(Enum):
@@ -79,7 +79,15 @@ class CrossWords:
                 if self._state.values[cell.index] == VOID_CELL:
                     return
 
-                self._state.selected = cell.index
+                if self._state.selected == cell.index:
+                    if self._state.selected_down is not None:
+                        self._set_selected(cell.index, SelectionDirection.RIGHT)
+
+                    elif self._state.selected_across is not None:
+                        self._set_selected(cell.index, SelectionDirection.DOWN)
+
+                else:
+                    self._set_selected(cell.index, SelectionDirection.RIGHT)
 
     def process_input(self, event: Event) -> None:
         if event.type == pygame.MOUSEBUTTONDOWN:
@@ -94,7 +102,7 @@ class CrossWords:
 
             if event.unicode.isalpha():
                 self._set_selected_value(event.unicode.upper())
-                self._move_selected(SelectionDirection.RIGHT)
+                self._move_selected()
 
             elif event.key == pygame.K_BACKSPACE:
                 self._set_selected_value(EMPTY_CELL)
@@ -116,10 +124,13 @@ class CrossWords:
             else:
                 self._cells[index].state = CellState.WRONG
 
-    def _move_selected(self, direction: SelectionDirection) -> None:
-        # FIXME:  Moving down does wrap around.
+    def _move_selected(self) -> None:
         if self._state.selected is None:
             return
+
+        direction: SelectionDirection = SelectionDirection.RIGHT
+        if self._state.selected_down is not None:
+            direction = SelectionDirection.DOWN
 
         jump_size: int = 1 if direction is SelectionDirection.RIGHT else self._state.puzzle.cols
         next_selected: int = self._state.selected + jump_size
@@ -128,20 +139,18 @@ class CrossWords:
             return next_selected >= len(self._cells)
 
         if is_next_invalid():
-            self._state.selected = None
+            self._set_selected(None, direction)
+            return
+
+        if (self._state.selected + 1) % self._state.puzzle.cols == 0:
+            self._set_selected(None, direction)
             return
 
         if self._state.values[next_selected] == VOID_CELL:
+            self._set_selected(None, direction)
+            return
 
-            # move until it's not VOID_CELL
-            while self._state.values[next_selected] == VOID_CELL:
-                next_selected += jump_size
-
-            if is_next_invalid():
-                self._state.selected = None
-                return
-
-        self._state.selected = next_selected
+        self._set_selected(next_selected, direction)
 
     def _set_selected_value(self, value: str) -> None:
         if self._state.selected is None:
@@ -176,9 +185,31 @@ class CrossWords:
             pygame.draw.line(self._board.surface, "red", Vector2(cell.placement.topleft) + pad,
                              Vector2(cell.placement.topleft) + Vector2(cell.surface.get_size()) - pad, 3)
 
-        #  Rendering hover surface
+        # Rendering selected clue
+        cell_clue: CellClue = self._state.puzzle.clues.by_index[cell.index]
+        if self._state.selected_down is not None and cell_clue.down == self._state.selected_down:
+            self._board.surface.blit(cell.hover, cell.placement)
+
+        if self._state.selected_across is not None and cell_clue.across == self._state.selected_across:
+            self._board.surface.blit(cell.hover, cell.placement)
+
+        # Rendering hover surface
         if cell.index == self._state.selected:
             self._board.surface.blit(cell.hover, cell.placement)
+
+    def _set_selected(self, cell_index: Optional[int], direction: SelectionDirection) -> None:
+        self._state.selected = cell_index
+        self._state.selected_down = None
+        self._state.selected_across = None
+
+        if cell_index is None:
+            return
+
+        if direction is SelectionDirection.RIGHT:
+            self._state.selected_across = self._state.puzzle.clues.by_index[self._state.selected].across
+
+        elif direction is SelectionDirection.DOWN:
+            self._state.selected_down = self._state.puzzle.clues.by_index[self._state.selected].down
 
     def render(self) -> None:
         # TODO: dont create a font every iteration
