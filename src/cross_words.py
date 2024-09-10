@@ -127,6 +127,7 @@ class CrossWords:
 
             elif event.key == pygame.K_BACKSPACE:
                 self._set_selected_value(EMPTY_CELL)
+                self._move_selected(backwards=True)
 
             elif event.key == pygame.K_SPACE:
                 self._check_puzzle()
@@ -145,7 +146,7 @@ class CrossWords:
             else:
                 self._cells[index].state = CellState.WRONG
 
-    def _move_selected(self) -> None:
+    def _move_selected(self, backwards: bool = False) -> None:
         if self._state.selected is None:
             return
 
@@ -154,6 +155,7 @@ class CrossWords:
             direction = SelectionDirection.DOWN
 
         jump_size: int = 1 if direction is SelectionDirection.RIGHT else self._state.puzzle.cols
+        jump_size = jump_size * -1 if backwards else jump_size
         next_selected: int = self._state.selected + jump_size
 
         def is_next_invalid() -> bool:
