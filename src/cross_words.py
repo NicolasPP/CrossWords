@@ -67,10 +67,10 @@ class CrossWords:
             return
 
         if (across_clue := self._metadata.clues_display.across.get_collided(mouse_pos)) is not None:
-            self._metadata.clues_display.set_selected_new(across=across_clue.id)
+            self._metadata.clues_display.set_selected(across=across_clue.id)
 
         if (down_clue := self._metadata.clues_display.down.get_collided(mouse_pos)) is not None:
-            self._metadata.clues_display.set_selected_new(down=down_clue.id)
+            self._metadata.clues_display.set_selected(down=down_clue.id)
 
     def _process_board_click(self, event: Event) -> None:
         mouse_pos: Vector2 = Vector2(pygame.mouse.get_pos()) - Vector2(self._board.placement.topleft)
@@ -80,7 +80,7 @@ class CrossWords:
                     return
 
                 cell_clue: CellClue = self._state.puzzle.clues.by_index[cell.index]
-                self._metadata.clues_display.set_selected_new(cell_clue.across, cell_clue.down)
+                self._metadata.clues_display.set_selected(cell_clue.across, cell_clue.down)
 
                 if self._state.selected == cell.index:
                     if self._state.selected_down is not None:

@@ -229,7 +229,7 @@ class CluesDisplay:
         self.across = across
         self.down = down
 
-    def set_selected_new(self, across: Optional[int] = None, down: Optional[int] = None) -> None:
+    def set_selected(self, across: Optional[int] = None, down: Optional[int] = None) -> None:
         self.across.clear_selection()
         self.down.clear_selection()
 
@@ -238,11 +238,6 @@ class CluesDisplay:
 
         if down is not None:
             self.down.clues[down].is_selected = True
-
-    def set_selected(self, clue: ClueDisplay) -> None:
-        self.across.clear_selection()
-        self.down.clear_selection()
-        clue.is_selected = True
 
 
 @dataclass(slots=True, init=False)
