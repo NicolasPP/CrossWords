@@ -1,5 +1,6 @@
 import math
 from dataclasses import dataclass
+from enum import Enum, auto
 from typing import Optional
 
 import pygame
@@ -12,6 +13,11 @@ from cross_word_state import CrossWordState
 from puzzle_reader import Clues
 
 LINE_SEP: int = 2
+
+
+class ScrollDirection(Enum):
+    UP = auto()
+    DOWN = auto()
 
 
 @dataclass(slots=True)
@@ -29,6 +35,8 @@ class ClueSet:
 
     surface: Surface
     clues: list[ClueDisplay]
+
+    scroll_pos: Vector2
 
     def __init__(self, window: Surface, window_placement: Rect, clue_set: dict[int, str], font: Font) -> None:
         self.window = window
@@ -59,17 +67,33 @@ class ClueSet:
             surface.blit(clue_display.surface, clue_display.placement)
 
         self.surface = surface
+        self.scroll_pos = Vector2(0)
 
-    def get_collided(self, mouse_pos) -> Optional[ClueDisplay]:
+    def get_collided(self, mouse_pos: Vector2) -> Optional[ClueDisplay]:
         if not self.window_placement.collidepoint(mouse_pos):
             return None
 
         mouse_pos -= self.window_placement.topleft
+        mouse_pos.y -= self.scroll_pos.y
         for clue in self.clues:
             if clue.placement.collidepoint(mouse_pos):
                 return clue
 
         return None
+
+    def scroll(self, direction: ScrollDirection) -> None:
+        dir_mult: int = 1 if direction == ScrollDirection.UP else -1
+        speed: int = 18
+        next_pos: int = self.scroll_pos.y + (speed * dir_mult)
+
+        min_pos: int = (self.surface.get_height() - self.window.get_height()) * -1
+        if next_pos >= 0:
+            next_pos = 0
+
+        elif next_pos <= min_pos:
+            next_pos = min_pos
+
+        self.scroll_pos.y = next_pos
 
 
 def multi_line_render(lines: list[str], max_width: int, font: Font) -> Surface:
@@ -255,8 +279,10 @@ class MetadataDisplay:
         self.clues_display = clues_display
 
     def render(self) -> None:
-        self.clues_display.across.window.blit(self.clues_display.across.surface, (0, 0))
-        self.clues_display.down.window.blit(self.clues_display.down.surface, (0, 0))
+        self.clues_display.across.window.fill("white")
+        self.clues_display.down.window.fill("white")
+        self.clues_display.across.window.blit(self.clues_display.across.surface, self.clues_display.across.scroll_pos)
+        self.clues_display.down.window.blit(self.clues_display.down.surface, self.clues_display.down.scroll_pos)
 
         self.clues_display.surface.blit(self.clues_display.across.window, self.clues_display.across.window_placement)
         self.clues_display.surface.blit(self.clues_display.down.window, self.clues_display.down.window_placement)

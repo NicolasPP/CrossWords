@@ -1,5 +1,6 @@
 from enum import Enum, auto
 from itertools import product
+from typing import Optional
 
 import pygame
 from pygame import mouse
@@ -12,7 +13,7 @@ from config import CLUE_ID_FONT_SIZE, VALUE_FONT_SIZE, WRONG_PAD
 from cross_word_state import CrossWordState
 from display_board import BoardDisplay
 from display_cell import CellDisplay, CellState
-from display_metadata import MetadataDisplay
+from display_metadata import MetadataDisplay, ScrollDirection
 from puzzle_reader import EMPTY_CELL, Puzzle, VOID_CELL
 
 
@@ -49,7 +50,21 @@ class CrossWords:
         if not self._metadata.clues_display.placement.collidepoint(mouse_pos):
             return
 
+        scroll_direction: Optional[ScrollDirection] = None
+        if event.button == 5:
+            scroll_direction = ScrollDirection.DOWN
+
+        elif event.button == 4:
+            scroll_direction = ScrollDirection.UP
+
         mouse_pos -= self._metadata.clues_display.placement.topleft
+        if scroll_direction is not None:
+            if self._metadata.clues_display.across.window_placement.collidepoint(mouse_pos):
+                self._metadata.clues_display.across.scroll(scroll_direction)
+
+            if self._metadata.clues_display.down.window_placement.collidepoint(mouse_pos):
+                self._metadata.clues_display.down.scroll(scroll_direction)
+            return
 
         if (across_clue := self._metadata.clues_display.across.get_collided(mouse_pos)) is not None:
             print(self._state.puzzle.clues.across[across_clue.id])
