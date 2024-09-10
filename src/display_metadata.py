@@ -9,6 +9,30 @@ from pygame.rect import Rect
 from pygame.surface import Surface
 
 from cross_word_state import CrossWordState
+from puzzle_reader import Clues
+
+
+@dataclass(slots=True, init=False)
+class ClueDisplay:
+    surface: Surface
+    placement: Rect
+
+
+@dataclass(slots=True, init=False)
+class ClueSet:
+
+    window: Surface
+    window_placement: Rect
+
+    surface: Surface
+    clues: list[ClueDisplay]
+
+    def __init__(self, window: Surface, window_placement: Rect, clue_set: dict[int, str]) -> None:
+        self.window = window
+        self.window_placement = window_placement
+
+        self.surface = create_clues_surface(window.get_width(), clue_set)
+        self.window.blit(self.surface, (0, 0))
 
 
 @dataclass(slots=True, init=False)
@@ -16,16 +40,14 @@ class CluesDisplay:
     surface: Surface
     placement: Rect
 
-    across_window: Surface
-    across_placement: Rect
+    across: ClueSet
+    down: ClueSet
 
-    down_window: Surface
-    down_placement: Rect
-
-    def __init__(self, parent: Surface, date_placement: Rect, padding: Vector2) -> None:
-        height: int = parent.get_height() - Vector2(date_placement.midbottom).y - padding.y * 2
-        surface: Surface = Surface((parent.get_width() - padding.x * 2, height))
-
+    def __init__(self, parent: Surface, date_placement: Rect, padding: Vector2, clues: Clues) -> None:
+        surface: Surface = Surface((
+            parent.get_width() - padding.x * 2,
+            parent.get_height() - Vector2(date_placement.midbottom).y - padding.y * 2
+        ))
         surface.fill("red")
 
         placement: Rect = surface.get_rect(midtop=date_placement.midbottom)
@@ -39,23 +61,27 @@ class CluesDisplay:
         across_window: Surface = Surface(size)
         across_window.fill("green")
         across_placement: Rect = across_window.get_rect(topleft=padding)
+        across: ClueSet = ClueSet(across_window, across_placement, clues.across)
+        surface.blit(across.window, across.window_placement)
 
         down_window: Surface = Surface(size)
         down_window.fill("yellow")
-        down_placement: Rect = down_window.get_rect(topleft=across_placement.topright)
+        down_placement: Rect = down_window.get_rect(topleft=across.window_placement.topright)
         down_placement.x += padding.x
-
-        surface.blit(across_window, across_placement)
-        surface.blit(down_window, down_placement)
+        down: ClueSet = ClueSet(down_window, down_placement, clues.down)
+        surface.blit(down.window, down.window_placement)
 
         self.surface = surface
         self.placement = placement
 
-        self.across_window = across_window
-        self.across_placement = across_placement
+        self.across = across
+        self.down = down
 
-        self.down_window = down_window
-        self.down_placement = down_placement
+
+def create_clues_surface(width: int, clues: dict[int, str]) -> Surface:
+    surface: Surface = Surface((width, width))
+    surface.fill("purple")
+    return surface
 
 
 @dataclass(slots=True, init=False)
@@ -71,7 +97,7 @@ class MetadataDisplay:
     date: Surface
     date_placement: Rect
 
-    clues: CluesDisplay
+    clues_display: CluesDisplay
 
     def __init__(self, board_placement: Rect, state: CrossWordState) -> None:
         window_rect: Rect = pygame.display.get_surface().get_rect()
@@ -113,8 +139,8 @@ class MetadataDisplay:
             date_placement.y += padding.y
             surface.blit(date, date_placement)
 
-        clues: CluesDisplay = CluesDisplay(surface, date_placement, padding)
-        surface.blit(clues.surface, clues.placement)
+        clues_display: CluesDisplay = CluesDisplay(surface, date_placement, padding, state.puzzle.clues)
+        surface.blit(clues_display.surface, clues_display.placement)
 
         self.is_default_title = is_default_title
 
@@ -127,7 +153,7 @@ class MetadataDisplay:
         self.date = date
         self.date_placement = date_placement
 
-        self.clues = clues
+        self.clues_display = clues_display
 
 
 def get_desired_font_size(font_name: str, text: str, desired_width: int) -> Optional[int]:
