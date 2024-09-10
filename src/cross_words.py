@@ -68,9 +68,27 @@ class CrossWords:
 
         if (across_clue := self._metadata.clues_display.across.get_collided(mouse_pos)) is not None:
             self._metadata.clues_display.set_selected(across=across_clue.id)
+            self._set_selected(
+                min(self._get_cells_with_clue(across_clue.id, SelectionDirection.RIGHT)),
+                SelectionDirection.RIGHT
+            )
 
         if (down_clue := self._metadata.clues_display.down.get_collided(mouse_pos)) is not None:
             self._metadata.clues_display.set_selected(down=down_clue.id)
+            self._set_selected(
+                min(self._get_cells_with_clue(down_clue.id, SelectionDirection.DOWN)),
+                SelectionDirection.DOWN
+            )
+
+    def _get_cells_with_clue(self, clue_id: int, direction: SelectionDirection) -> list[int]:
+        indexes: list[int] = []
+        for cell in self._cells:
+            cell_clue: CellClue = self._state.puzzle.clues.by_index[cell.index]
+            compare_clue: int = cell_clue.down if direction is SelectionDirection.DOWN else cell_clue.across
+            if compare_clue == clue_id:
+                indexes.append(cell.index)
+
+        return indexes
 
     def _process_board_click(self, event: Event) -> None:
         mouse_pos: Vector2 = Vector2(pygame.mouse.get_pos()) - Vector2(self._board.placement.topleft)
