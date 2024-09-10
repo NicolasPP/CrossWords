@@ -105,9 +105,13 @@ class CellDisplay:
 class MetadataDisplay:
     placement: Rect
     surface: Surface
+    is_default_title: bool
 
     title: Surface
+    title_placement: Rect
+
     date: Surface
+    date_placement: Rect
 
 
 class BoardDisplay(NamedTuple):
@@ -123,7 +127,7 @@ class CrossWords:
 
         self._cells: list[CellDisplay] = self._create_cells_display()
         self._board: BoardDisplay = self._create_board_display()
-        self._clues: MetadataDisplay = self._create_metadata_display()
+        self._metadata: MetadataDisplay = self._create_metadata_display()
 
     def process_input(self, event: Event) -> None:
         if event.type == pygame.MOUSEBUTTONDOWN:
@@ -228,25 +232,45 @@ class CrossWords:
         height: int = window_rect.height - padding.y * 2
         surface: Surface = Surface((width, height))
         surface.fill("white")
+        is_default_title: bool = self._state.puzzle.title.startswith("NY TIMES")
 
         title_font_size: int = get_desired_font_size(self._font_name, self._state.puzzle.title,
-                                                     math.floor(width * 0.7))
+                                                     math.floor(width * 0.6))
         title_font: Font = SysFont(self._font_name, title_font_size)
         title: Surface = title_font.render(self._state.puzzle.title, True, "black", "white")
 
+        date_width_factor: float = 0.4 if is_default_title else 0.2
         date_font_size: int = get_desired_font_size(self._font_name, self._state.puzzle.date,
-                                                    math.floor(width * 0.2))
+                                                    math.floor(width * date_width_factor))
         date_font: Font = SysFont(self._font_name, date_font_size)
         date: Surface = date_font.render(self._state.puzzle.date, True, "black", "white")
 
         title_placement: Rect = title.get_rect(midtop=(width // 2, padding.y))
-        surface.blit(title, title_placement)
 
-        date_placement: Rect = date.get_rect(midtop=title_placement.midbottom)
-        date_placement.y += padding.y
-        surface.blit(date, date_placement)
+        date_rect_dest: dict[str, tuple[float, float]] = \
+            {"midtop": (width // 2, padding.y)} if is_default_title else {"midtop": title_placement.midbottom}
+        date_placement: Rect = date.get_rect(**date_rect_dest)
+        print(date_placement)
 
-        return MetadataDisplay(surface.get_rect(topleft=top_left), surface, title, date)
+        if is_default_title:
+            surface.blit(date, date_placement)
+
+        else:
+            surface.blit(title, title_placement)
+            date_placement.y += padding.y
+            surface.blit(date, date_placement)
+
+        return MetadataDisplay(
+            surface.get_rect(topleft=top_left),
+            surface,
+            is_default_title,
+
+            title,
+            title_placement,
+
+            date,
+            date_placement
+        )
 
     def _create_cells_display(self) -> list[CellDisplay]:
         cells: list[CellDisplay] = []
@@ -307,11 +331,12 @@ class CrossWords:
         return Vector2(pygame.mouse.get_pos()) - Vector2(self._board.placement.topleft)
 
     def render(self) -> None:
+        # TODO: dont create a font every iteration
         font: Font = SysFont(self._font_name, VALUE_FONT_SIZE)
         for cell in self._cells:
             self._render_cell(cell, font)
 
-        pygame.display.get_surface().blit(self._clues.surface, self._clues.placement)
+        pygame.display.get_surface().blit(self._metadata.surface, self._metadata.placement)
         pygame.display.get_surface().blit(self._board.surface, self._board.placement)
 
 
