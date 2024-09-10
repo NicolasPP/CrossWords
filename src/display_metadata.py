@@ -41,19 +41,20 @@ class ClueSet:
     window_placement: Rect
 
     surface: Surface
-    clues: list[ClueDisplay]
+    clues: dict[int, ClueDisplay]
 
     scroll_pos: Vector2
 
     def __init__(self, window: Surface, window_placement: Rect, clue_set: dict[int, str], font: Font) -> None:
         self.window = window
         self.window_placement = window_placement
-        self.clues = []
+        self.clues = {}
 
+        ids: list[int] = sorted(list(clue_set.keys()))
         prev_placement: Optional[Rect] = None
-        for id_, raw_clue in clue_set.items():
+        for id_ in ids:
 
-            clue: list[str] = split_text(raw_clue, window.get_width(), font)
+            clue: list[str] = split_text(clue_set[id_], window.get_width(), font)
             clue_surface: Surface = multi_line_render(clue, window.get_width(), font)
             placement: Rect = clue_surface.get_rect(topleft=(0, 0))
 
@@ -61,7 +62,7 @@ class ClueSet:
                 placement = clue_surface.get_rect(topleft=prev_placement.bottomleft)
                 placement.y += LINE_SEP * 4
 
-            self.clues.append((ClueDisplay(clue_surface, placement, id_)))
+            self.clues[id_] = ClueDisplay(clue_surface, placement, id_)
             prev_placement = placement
 
         surface: Surface = Surface((
@@ -70,14 +71,14 @@ class ClueSet:
         ))
         surface.fill("white")
 
-        for clue_display in self.clues:
+        for clue_display in self.clues.values():
             surface.blit(clue_display.surface, clue_display.placement)
 
         self.surface = surface
         self.scroll_pos = Vector2(0)
 
     def clear_selection(self) -> None:
-        for clue in self.clues:
+        for clue in self.clues.values():
             clue.is_selected = False
 
     def get_collided(self, mouse_pos: Vector2) -> Optional[ClueDisplay]:
@@ -86,14 +87,14 @@ class ClueSet:
 
         mouse_pos -= self.window_placement.topleft
         mouse_pos.y -= self.scroll_pos.y
-        for clue in self.clues:
+        for clue in self.clues.values():
             if clue.placement.collidepoint(mouse_pos):
                 return clue
 
         return None
 
     def render_selected(self) -> None:
-        for clue in self.clues:
+        for clue in self.clues.values():
             if not clue.is_selected:
                 continue
 
@@ -227,6 +228,16 @@ class CluesDisplay:
 
         self.across = across
         self.down = down
+
+    def set_selected_new(self, across: Optional[int] = None, down: Optional[int] = None) -> None:
+        self.across.clear_selection()
+        self.down.clear_selection()
+
+        if across is not None:
+            self.across.clues[across].is_selected = True
+
+        if down is not None:
+            self.down.clues[down].is_selected = True
 
     def set_selected(self, clue: ClueDisplay) -> None:
         self.across.clear_selection()
